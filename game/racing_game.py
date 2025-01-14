@@ -302,7 +302,7 @@ while running:
                 game_state = "game_over"
                 high_score_broken, high_score = check_and_save_high_score(score)
                 new_high_score = high_score_broken
-    score = score +1 
+    score = score +1
 
     # Hiển thị thông báo điểm cao
     if new_high_score:
