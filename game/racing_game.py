@@ -26,6 +26,11 @@ pygame.display.set_caption("Racing Game - Rear View")
 # Tần số khung hình
 clock = pygame.time.Clock()
 FPS = 60
+# Thêm biến trạng thái game và đếm ngược
+COUNTDOWN = 3
+game_state = "countdown"  # Các trạng thái: "countdown", "playing", "game_over"
+countdown_timer = FPS * COUNTDOWN  # Số frame để đếm ngược (3 giây)
+countdown_font = pygame.font.Font(None, 74)  # Font lớn hơn cho đếm ngược
 
 # Kích thước xe của người chơi
 PLAYER_BASE_WIDTH = 120
@@ -47,14 +52,17 @@ score = 0
 font = pygame.font.Font(None, 36)
 
 # Tải hình ảnh xe của người chơi
-car_image = pygame.image.load(r'D:\Racing AI\RL-Racing\assets\images\car.jpg')
+car_image = pygame.image.load(r'assets/images/car.jpg')
 car_image = pygame.transform.scale(car_image, (PLAYER_BASE_WIDTH, PLAYER_BASE_HEIGHT))
 
 # Lớp chướng ngại vật (Obstacle)
 class Obstacle:
     def __init__(self, track_position):
         self.track_z = track_position
-        self.x = random.uniform(-0.4, 0.4)
+        # Tạo danh sách các vị trí có thể xuất hiện
+        possible_positions = [-0.4, -0.2, 0, 0.2, 0.4]  # Chia đường đua thành 5 làn
+        # Chọn ngẫu nhiên một vị trí từ danh sách
+        self.x = random.choice(possible_positions)
         self.width = 40
         self.height = 60
         self.active = True
@@ -75,7 +83,6 @@ class Obstacle:
 
         return screen_x, screen_y, width, height, relative_z
 
-    # Vẽ chướng ngại vật trên màn hình
     def draw(self, screen, road_offset):
         pos = self.get_screen_position(road_offset)
         if pos:
@@ -128,7 +135,7 @@ def draw_road():
             ))
 
 # Tải hình ảnh cây
-tree_image = pygame.image.load(r'D:\Racing AI\RL-Racing\assets\images\tree.png')
+tree_image = pygame.image.load(r'assets/images/tree.png')
 
 # Tạo lớp cây (Tree)
 class Tree:
@@ -191,51 +198,89 @@ obstacles = [
 # Cơ chế tăng độ khó
 difficulty_timer = 0
 obstacle_frequency = ROAD_LENGTH / 5
-# Biến trạng thái màn chơi
-current_level = 1
-level_2_score = 2000
-level_3_score = 3000
-final_score = 5000
-transition_message = ""
 
-# Hàm hiển thị thông báo
-def display_message(message, duration=3):
-    global transition_message
-    transition_message = message
-    pygame.display.flip()
-    pygame.time.wait(duration * 1000)
-    transition_message = ""
+# Thêm hàm hiển thị đếm ngược
+def display_countdown(count):
+    text = countdown_font.render(str(count), True, WHITE)
+    text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    screen.blit(text, text_rect)
 
-# Vòng lặp chính của trò chơi
+# Hàm kiểm tra và lưu điểm cao
+def check_and_save_high_score(current_score):
+    try:
+        with open("score.txt", "r") as file:
+            high_score = int(file.read().strip())
+    except (FileNotFoundError, ValueError):
+        high_score = 0
+
+    if current_score > high_score:
+        with open("score.txt", "w") as file:
+            file.write(str(current_score))
+        return True, current_score  # Trả về True nếu phá kỷ lục
+    return False, high_score  # Trả về False nếu không phá kỷ lục
+
+# Hiển thị thông báo "Bạn có muốn chơi lại không?"
+def display_restart_message():
+    font_restart = pygame.font.Font(None, 48)
+    text = font_restart.render("Do you want to play again? (Y/N)", True, WHITE)
+    text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    screen.blit(text, text_rect)
+
+# Vòng lặp chính
 running = True
+new_high_score = False  # Cờ để kiểm tra có phá kỷ lục hay không
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
+        if game_state == "game_over":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_y:
+                    # Chơi lại
+                    game_state = "countdown"
+                    countdown_timer = FPS * COUNTDOWN
+                    score = 0  # Reset điểm
+                    obstacles = [
+                        Obstacle(i * (ROAD_LENGTH / 5)) for i in range(5)
+                    ]
+                    road_offset = 0
+                elif event.key == pygame.K_n:
+                    # Thoát
+                    running = False
+
+    # Đếm ngược
+    if game_state == "countdown":
+        screen.fill(DARK_GRAY)
+        seconds_left = countdown_timer // FPS + 1
+        display_countdown(seconds_left)
+        countdown_timer -= 1
+
+        if countdown_timer < 0:
+            game_state = "playing"
+
+        pygame.display.flip()
+        clock.tick(FPS)
+        continue
+
     # Xử lý di chuyển xe
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT] and player_x > SCREEN_WIDTH // 2 - ROAD_BOTTOM_WIDTH // 2 + PLAYER_BASE_WIDTH // 2:
         player_x -= player_speed
-    if keys[pygame.K_RIGHT] and player_x < SCREEN_WIDTH // 2 + ROAD_BOTTOM_WIDTH // 2 - PLAYER_BASE_WIDTH // 2:
+    elif keys[pygame.K_RIGHT] and player_x < SCREEN_WIDTH // 2 + ROAD_BOTTOM_WIDTH // 2 - PLAYER_BASE_WIDTH // 2:
         player_x += player_speed
 
-
-    # Cập nhật trạng thái đường và độ khó
+    # Cập nhật trạng thái đường
     road_offset = (road_offset - road_speed) % ROAD_LENGTH
     difficulty_timer += 1
     if difficulty_timer % (FPS * 10) == 0:
         road_speed += 1
-        obstacle_frequency *= 0.9
-        if obstacle_frequency < 50:
-            obstacle_frequency = 50
 
     # Thêm chướng ngại vật
     if len(obstacles) < 5 or max(o.track_z for o in obstacles) < ROAD_LENGTH:
         new_pos = max(o.track_z for o in obstacles) + obstacle_frequency
         obstacles.append(Obstacle(new_pos))
-
-    obstacles = [obs for obs in obstacles if obs.active]
 
     # Vẽ giao diện
     screen.fill(GREEN)
@@ -246,44 +291,29 @@ while running:
         obstacle.draw(screen, road_offset)
 
     draw_player()
-    display_score()
+    display_score()  # Hiển thị điểm hiện tại
 
     # Kiểm tra va chạm
     for obstacle in obstacles:
         pos = obstacle.get_screen_position(road_offset)
         if pos:
-            screen_x, screen_y, width, height, relative_z = pos
-            if relative_z < 0.2:
-                if abs(screen_x - player_x) < (PLAYER_BASE_WIDTH + width) // 3:
-                    print(f"Game Over! Final Score: {score}")
-                    pygame.quit()
-                    sys.exit()
+            screen_x, screen_y, width, height, _ = pos
+            if player_x > screen_x - width // 2 and player_x < screen_x + width // 2 and SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 50 > screen_y - height:
+                game_state = "game_over"
+                high_score_broken, high_score = check_and_save_high_score(score)
+                new_high_score = high_score_broken
+    score = score +1 
 
-    # Cập nhật điểm và kiểm tra chuyển màn
-    score += 1
-    if current_level == 1 and score >= level_2_score:
-        display_message("Chúc mừng! Bạn đã hoàn thành màn 1. Đến màn 2!")
-        current_level = 2
-        score = 0
-        road_speed = 5  # Reset tốc độ
+    # Hiển thị thông báo điểm cao
+    if new_high_score:
+        high_score_text = font.render(f"New High Score: {high_score}", True, GREEN)
+        screen.blit(high_score_text, (SCREEN_WIDTH // 2 - high_score_text.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
 
-    elif current_level == 2 and score >= level_3_score:
-        display_message("Tuyệt vời! Bạn đã vào màn cuối cùng!")
-        current_level = 3
-        score = 0
-        road_speed = 5
-
-    elif current_level == 3 and score >= final_score:
-        display_message("Chúc mừng! Bạn đã phá đảo trò chơi!")
-        pygame.quit()
-        sys.exit()
-
-    # Hiển thị thông báo màn chơi (nếu có)
-    if transition_message:
-        message_surface = font.render(transition_message, True, WHITE)
-        screen.blit(message_surface, (SCREEN_WIDTH // 2 - message_surface.get_width() // 2, SCREEN_HEIGHT // 2))
+    if game_state == "game_over":
+        display_restart_message()
 
     pygame.display.flip()
     clock.tick(FPS)
 
 pygame.quit()
+sys.exit()
