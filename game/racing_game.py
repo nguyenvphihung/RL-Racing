@@ -36,7 +36,7 @@ player_speed = 8
 # Kích thước và thông số đường đua
 ROAD_TOP_WIDTH = 300
 ROAD_BOTTOM_WIDTH = 600
-HORIZON_Y = SCREEN_HEIGHT // 3
+HORIZON_Y = SCREEN_HEIGHT // 2
 ROAD_LENGTH = 1000
 STRIPE_SPACING = 50
 road_offset = 0
