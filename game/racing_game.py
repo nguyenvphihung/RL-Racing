@@ -47,7 +47,7 @@ score = 0
 font = pygame.font.Font(None, 36)
 
 # Tải hình ảnh xe của người chơi
-car_image = pygame.image.load(r'D:\Racing AI\RL-Racing\assets\images\car.jpg')
+car_image = pygame.image.load('assets/images/car.jpg')
 car_image = pygame.transform.scale(car_image, (PLAYER_BASE_WIDTH, PLAYER_BASE_HEIGHT))
 
 # Lớp chướng ngại vật (Obstacle)
@@ -128,7 +128,7 @@ def draw_road():
             ))
 
 # Tải hình ảnh cây
-tree_image = pygame.image.load(r'D:\Racing AI\RL-Racing\assets\images\tree.png')
+tree_image = pygame.image.load('assets/images/tree.png')
 
 # Tạo lớp cây (Tree)
 class Tree:
