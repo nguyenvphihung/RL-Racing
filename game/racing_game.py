@@ -58,7 +58,7 @@ car_image = pygame.transform.scale(car_image, (PLAYER_BASE_WIDTH, PLAYER_BASE_HE
 
 # Vẽ xe của người chơi
 def draw_player():
-    screen.blit(car_image, (player_x - PLAYER_BASE_WIDTH // 2, SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 50))
+    screen.blit(car_image, (player_x - PLAYER_BASE_WIDTH // 2, SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 20 ))
 
 # Tạo danh sách hình ảnh chướng ngại vật
 obstacle_images = [
