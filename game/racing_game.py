@@ -15,14 +15,15 @@ WHITE = (255, 255, 255)
 GRAY = (100, 100, 100)
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
+GREEN = (92,179,56)
 DARK_GRAY = (50, 50, 50)
 SKY_BLUE = (135, 206, 235)
 
 # Thiết lập màn hình
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Racing Game - Rear View")
-
+icon = pygame.image.load(r'assets/images/icon.png')
+pygame.display.set_icon(icon)
 # Tần số khung hình
 clock = pygame.time.Clock()
 FPS = 60
@@ -32,16 +33,10 @@ game_state = "countdown"  # Các trạng thái: "countdown", "playing", "game_ov
 countdown_timer = FPS * COUNTDOWN  # Số frame để đếm ngược (3 giây)
 countdown_font = pygame.font.Font(None, 74)  # Font lớn hơn cho đếm ngược
 
-# Kích thước xe của người chơi
-PLAYER_BASE_WIDTH = 120
-PLAYER_BASE_HEIGHT = 100
-player_x = SCREEN_WIDTH // 2
-player_speed = 8
-
 # Kích thước và thông số đường đua
 ROAD_TOP_WIDTH = 300
 ROAD_BOTTOM_WIDTH = 600
-HORIZON_Y = SCREEN_HEIGHT // 3
+HORIZON_Y = SCREEN_HEIGHT // 1.5
 ROAD_LENGTH = 1000
 STRIPE_SPACING = 50
 road_offset = 0
@@ -51,26 +46,42 @@ road_speed = 5
 score = 0
 font = pygame.font.Font(None, 36)
 
+# Kích thước xe của người chơi
+PLAYER_BASE_WIDTH = 90  # Giảm từ 120
+PLAYER_BASE_HEIGHT = 75  # Giảm từ 100
+player_x = SCREEN_WIDTH // 2
+player_speed = 8
+
 # Tải hình ảnh xe của người chơi
 car_image = pygame.image.load(r'assets/images/car.jpg')
 car_image = pygame.transform.scale(car_image, (PLAYER_BASE_WIDTH, PLAYER_BASE_HEIGHT))
 
+# Vẽ xe của người chơi
+def draw_player():
+    screen.blit(car_image, (player_x - PLAYER_BASE_WIDTH // 2, SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 50))
+
+# Tạo danh sách hình ảnh chướng ngại vật
+obstacle_images = [
+    pygame.image.load('assets/images/1.png'),
+    pygame.image.load('assets/images/2.png'),
+    pygame.image.load('assets/images/4.png'),
+    pygame.image.load('assets/images/3.png')
+]
 # Lớp chướng ngại vật (Obstacle)
 class Obstacle:
     def __init__(self, track_position):
         self.track_z = track_position
-        # Tạo danh sách các vị trí có thể xuất hiện
-        possible_positions = [-0.4, -0.2, 0, 0.2, 0.4]  # Chia đường đua thành 5 làn
-        # Chọn ngẫu nhiên một vị trí từ danh sách
+        possible_positions = [-0.4, -0.2, 0, 0.2, 0.4]  # Các làn trên đường
         self.x = random.choice(possible_positions)
-        self.width = 40
-        self.height = 60
+        self.image = random.choice(obstacle_images)  # Chọn hình ảnh ngẫu nhiên từ danh sách
+        self.width = 70  # Tăng kích thước chiều rộng
+        self.height = 110  # Tăng kích thước chiều cao
         self.active = True
 
-    # Tính toán vị trí trên màn hình của chướng ngại vật
+
     def get_screen_position(self, road_offset):
         relative_z = 1 - ((self.track_z - road_offset) % ROAD_LENGTH / ROAD_LENGTH)
-        if relative_z < -0.2 or relative_z > 1:  # Nếu vượt khỏi màn hình (không hiển thị)
+        if relative_z < -0.2 or relative_z > 1:  # Nếu không hiển thị trên màn hình
             return None
 
         perspective = relative_z
@@ -87,12 +98,10 @@ class Obstacle:
         pos = self.get_screen_position(road_offset)
         if pos:
             screen_x, screen_y, width, height, _ = pos
-            pygame.draw.rect(screen, RED, (
-                screen_x - width / 2,
-                screen_y - height,
-                width,
-                height
-            ))
+            # Chỉnh kích thước hình ảnh theo tỷ lệ
+            scaled_image = pygame.transform.scale(self.image, (int(width), int(height)))
+            # Vẽ hình ảnh lên màn hình
+            screen.blit(scaled_image, (screen_x - width / 2, screen_y - height))
 
 # Tạo các vạch kẻ trên đường
 def create_road_stripes():
@@ -105,28 +114,23 @@ road_stripes = create_road_stripes()
 
 #Vạch kẻ đường
 def draw_road():
-    # Vẽ bầu trời
     pygame.draw.rect(screen, SKY_BLUE, (0, 0, SCREEN_WIDTH, HORIZON_Y))
-    # Vẽ bãi cỏ
     pygame.draw.rect(screen, GREEN, (0, HORIZON_Y, SCREEN_WIDTH, SCREEN_HEIGHT - HORIZON_Y))
 
-    # Vẽ đường
     road_points = [
         (SCREEN_WIDTH // 2 - ROAD_BOTTOM_WIDTH // 2, SCREEN_HEIGHT),
-        (SCREEN_WIDTH // 2 - ROAD_TOP_WIDTH // 2, HORIZON_Y),
-        (SCREEN_WIDTH // 2 + ROAD_TOP_WIDTH // 2, HORIZON_Y),
+        (SCREEN_WIDTH // 2 - ROAD_TOP_WIDTH // 3, HORIZON_Y),
+        (SCREEN_WIDTH // 2 + ROAD_TOP_WIDTH // 3, HORIZON_Y),
         (SCREEN_WIDTH // 2 + ROAD_BOTTOM_WIDTH // 2, SCREEN_HEIGHT)
     ]
     pygame.draw.polygon(screen, GRAY, road_points)
 
-    # Vẽ vạch kẻ giữa đường
     for stripe_pos in road_stripes:
         relative_pos = 1 - ((stripe_pos - road_offset) % ROAD_LENGTH / ROAD_LENGTH)
         if 0 <= relative_pos <= 1:
             y = HORIZON_Y + (SCREEN_HEIGHT - HORIZON_Y) * (1 - relative_pos)
-            stripe_width = 10 + (1 - relative_pos) * 20  # Tính chiều rộng
-            stripe_length = 30 + (1 - relative_pos) * 50  # Tính chiều dài
-
+            stripe_width = 5 + (1 - relative_pos) * 15
+            stripe_length = 20 + (1 - relative_pos) * 40
             pygame.draw.rect(screen, WHITE, (
                 SCREEN_WIDTH // 2 - stripe_width / 2,
                 y - stripe_length / 2,
@@ -134,10 +138,10 @@ def draw_road():
                 stripe_length
             ))
 
-# Tải hình ảnh cây
-tree_image = pygame.image.load(r'assets/images/tree.png')
 
-# Tạo lớp cây (Tree)
+# Tải hình ảnh cây
+tree_image = pygame.image.load('assets/images/tree.png')
+
 class Tree:
     def __init__(self, track_position, side):
         self.track_z = track_position
@@ -147,22 +151,23 @@ class Tree:
 
     def get_screen_position(self, road_offset):
         relative_z = 1 - ((self.track_z - road_offset) % ROAD_LENGTH / ROAD_LENGTH)
-        if relative_z < -0.2 or relative_z > 1:  # Nếu vượt khỏi màn hình
+        if relative_z < -0.5 or relative_z > 1.2:  # Cho phép cây biến mất chậm hơn
             return None
 
         perspective = relative_z
-        screen_y = HORIZON_Y + (SCREEN_HEIGHT - HORIZON_Y) * (1 - relative_z)
-        road_width = ROAD_TOP_WIDTH + (ROAD_BOTTOM_WIDTH - ROAD_TOP_WIDTH) * (1 - relative_z)
+        screen_y = HORIZON_Y + (SCREEN_HEIGHT - HORIZON_Y) * (1 - relative_z) + self.height * (1 - perspective) * 0.2
+        road_width = ROAD_TOP_WIDTH + (ROAD_BOTTOM_WIDTH - ROAD_TOP_WIDTH) * (1 - relative_z * 0.5)
 
         if self.side == "left":
-            screen_x = SCREEN_WIDTH // 2 - road_width / 2 - 50
+            screen_x = SCREEN_WIDTH // 2 - road_width / 2 - self.width * (1 - perspective * 2) / 2
         else:
-            screen_x = SCREEN_WIDTH // 2 + road_width / 2 + 50
+            screen_x = SCREEN_WIDTH // 2 + road_width / 2 + self.width * (1 - perspective * 2) / 2
 
         width = self.width * (1 - perspective * 0.7)
         height = self.height * (1 - perspective * 0.7)
 
         return screen_x, screen_y, width, height, relative_z
+
 
     def draw(self, screen, road_offset):
         pos = self.get_screen_position(road_offset)
@@ -180,10 +185,6 @@ def create_trees():
     return trees
 
 trees = create_trees()
-
-# Vẽ xe của người chơi
-def draw_player():
-    screen.blit(car_image, (player_x - PLAYER_BASE_WIDTH // 2, SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 50))
 
 # Hiển thị điểm số
 def display_score():
