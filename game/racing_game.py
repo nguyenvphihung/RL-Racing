@@ -27,6 +27,12 @@ pygame.display.set_icon(icon)
 # Tần số khung hình
 clock = pygame.time.Clock()
 FPS = 60
+
+# # Thêm âm thanh
+# pygame.mixer.music.load('assets/sounds/background.mp3')
+# pygame.mixer.music.play(-1)  # Phát lặp lại
+# crash_sound = pygame.mixer.Sound('assets/sounds/crash.wav')
+
 # Thêm biến trạng thái game và đếm ngược
 COUNTDOWN = 3
 game_state = "countdown"  # Các trạng thái: "countdown", "playing", "game_over"
@@ -78,7 +84,6 @@ class Obstacle:
         self.height = 110  # Tăng kích thước chiều cao
         self.active = True
 
-
     def get_screen_position(self, road_offset):
         relative_z = 1 - ((self.track_z - road_offset) % ROAD_LENGTH / ROAD_LENGTH)
         if relative_z < -0.2 or relative_z > 1:  # Nếu không hiển thị trên màn hình
@@ -102,6 +107,13 @@ class Obstacle:
             scaled_image = pygame.transform.scale(self.image, (int(width), int(height)))
             # Vẽ hình ảnh lên màn hình
             screen.blit(scaled_image, (screen_x - width / 2, screen_y - height))
+
+    def get_rect(self, road_offset):
+        pos = self.get_screen_position(road_offset)
+        if pos:
+            screen_x, screen_y, width, height, _ = pos
+            return pygame.Rect(screen_x - width / 2, screen_y - height, width, height)
+        return None
 
 # Tạo các vạch kẻ trên đường
 def create_road_stripes():
@@ -191,10 +203,13 @@ def display_score():
     text = font.render(f"Score: {score}", True, WHITE)
     screen.blit(text, (10, 10))
 
+# Hiển thị tốc độ
+def display_speed():
+    speed_text = font.render(f"Speed: {road_speed} km/h", True, WHITE)
+    screen.blit(speed_text, (10, 40))
+
 # Danh sách chướng ngại vật ban đầu
-obstacles = [
-    Obstacle(i * (ROAD_LENGTH / 5)) for i in range(5)
-]
+obstacles = []
 
 # Cơ chế tăng độ khó
 difficulty_timer = 0
@@ -243,9 +258,7 @@ while running:
                     game_state = "countdown"
                     countdown_timer = FPS * COUNTDOWN
                     score = 0  # Reset điểm
-                    obstacles = [
-                        Obstacle(i * (ROAD_LENGTH / 5)) for i in range(5)
-                    ]
+                    obstacles = []
                     road_offset = 0
                 elif event.key == pygame.K_n:
                     # Thoát
@@ -260,6 +273,8 @@ while running:
 
         if countdown_timer < 0:
             game_state = "playing"
+            # Tạo chướng ngại vật ở khoảng cách xa ban đầu
+            obstacles = [Obstacle(ROAD_LENGTH + i * (ROAD_LENGTH / 5)) for i in range(5)]
 
         pygame.display.flip()
         clock.tick(FPS)
@@ -271,6 +286,10 @@ while running:
         player_x -= player_speed
     elif keys[pygame.K_RIGHT] and player_x < SCREEN_WIDTH // 2 + ROAD_BOTTOM_WIDTH // 2 - PLAYER_BASE_WIDTH // 2:
         player_x += player_speed
+    if keys[pygame.K_UP]:
+        road_speed += 0.1
+    elif keys[pygame.K_DOWN]:
+        road_speed -= 0.1
 
     # Cập nhật trạng thái đường
     road_offset = (road_offset - road_speed) % ROAD_LENGTH
@@ -293,17 +312,19 @@ while running:
 
     draw_player()
     display_score()  # Hiển thị điểm hiện tại
+    display_speed()  # Hiển thị tốc độ hiện tại
 
     # Kiểm tra va chạm
+    player_rect = pygame.Rect(player_x - PLAYER_BASE_WIDTH // 2, SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 20, PLAYER_BASE_WIDTH, PLAYER_BASE_HEIGHT)
     for obstacle in obstacles:
-        pos = obstacle.get_screen_position(road_offset)
-        if pos:
-            screen_x, screen_y, width, height, _ = pos
-            if player_x > screen_x - width // 2 and player_x < screen_x + width // 2 and SCREEN_HEIGHT - PLAYER_BASE_HEIGHT - 50 > screen_y - height:
-                game_state = "game_over"
-                high_score_broken, high_score = check_and_save_high_score(score)
-                new_high_score = high_score_broken
-    score = score +1
+        obstacle_rect = obstacle.get_rect(road_offset)
+        if obstacle_rect and player_rect.colliderect(obstacle_rect):
+            game_state = "game_over"
+            # pygame.mixer.Sound.play(crash_sound)  # Phát âm thanh va chạm
+            high_score_broken, high_score = check_and_save_high_score(score)
+            new_high_score = high_score_broken
+            break
+    score += 1
 
     # Hiển thị thông báo điểm cao
     if new_high_score:
