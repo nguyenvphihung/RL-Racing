@@ -125,7 +125,7 @@ def main():
 
         # Thêm chướng ngại vật
         if random.randint(1, 50) == 1:
-            obstacles.append(Obstacle('assets/images/1.png'))
+            obstacles.append(Obstacle('assets/images/3.png'))
 
         # Di chuyển và vẽ chướng ngại vật
         for obstacle in obstacles[:]:
