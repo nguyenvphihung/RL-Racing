@@ -29,82 +29,6 @@ CARIMG = pygame.image.load('assets/images/car.png')
 OBSTACLESIMG = pygame.image.load('assets/images/obstacles.png')
 BGIMG = pygame.image.load('assets/images/background.png')
 
-class CarAIAgent:
-    def __init__(self, action_space=4, learning_rate=0.1, discount_factor=0.95, epsilon=1.0, epsilon_decay=0.995):
-        self.q_table = defaultdict(lambda: np.zeros(action_space))
-        self.lr = learning_rate
-        self.gamma = discount_factor
-        self.epsilon = epsilon
-        self.epsilon_decay = epsilon_decay
-        self.action_space = action_space
-        self.total_reward = 0
-        self.episode_reward = 0
-        
-    def get_state(self, car, obstacles):
-        """Convert game state to a discrete state representation"""
-        car_x = int(car.x)
-        car_y = int(car.y)
-        
-        # Find closest obstacle
-        closest_obstacle = None
-        min_distance = float('inf')
-        
-        for obstacle in obstacles.ls:
-            obstacle_x = int(X_MARGIN + obstacle[0]*LANEWIDTH + (LANEWIDTH-CARWIDTH)/2)
-            obstacle_y = int(obstacle[1])
-            
-            distance = ((car_x - obstacle_x)**2 + (car_y - obstacle_y)**2)**0.5
-            if distance < min_distance:
-                min_distance = distance
-                closest_obstacle = (obstacle_x, obstacle_y)
-        
-        if closest_obstacle:
-            # Discretize distances into bins
-            dx = (closest_obstacle[0] - car_x) // 20
-            dy = (closest_obstacle[1] - car_y) // 20
-            
-            # Add car's lane position
-            car_lane = (car_x - X_MARGIN) // LANEWIDTH
-            
-            return (dx, dy, car_lane)
-        return (0, 0, 0)
-    
-    def get_action(self, state):
-        """Choose action using epsilon-greedy policy"""
-        if np.random.random() < self.epsilon:
-            return np.random.randint(self.action_space)
-        else:
-            return np.argmax(self.q_table[state])
-    
-    def update(self, state, action, reward, next_state):
-        """Update Q-table using Q-learning formula"""
-        old_value = self.q_table[state][action]
-        next_max = np.max(self.q_table[next_state])
-        
-        new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * next_max)
-        self.q_table[state][action] = new_value
-        
-        self.epsilon = max(0.01, self.epsilon * self.epsilon_decay)
-        self.episode_reward += reward
-    
-    def get_movement_from_action(self, action):
-        """Convert action index to movement commands"""
-        moveLeft = False
-        moveRight = False
-        moveUp = False
-        moveDown = False
-        
-        if action == 0:  # Left
-            moveLeft = True
-        elif action == 1:  # Right
-            moveRight = True
-        elif action == 2:  # Up
-            moveUp = True
-        elif action == 3:  # Down
-            moveDown = True
-            
-        return moveLeft, moveRight, moveUp, moveDown
-
 class Background():
     def __init__(self):
         self.x = 0
@@ -113,13 +37,41 @@ class Background():
         self.img = BGIMG
         self.width = self.img.get_width()
         self.height = self.img.get_height()
+        
     def draw(self):
         DISPLAYSURF.blit(self.img, (int(self.x), int(self.y)))
         DISPLAYSURF.blit(self.img, (int(self.x), int(self.y-self.height)))
+        
     def update(self):
         self.y += self.speed
         if self.y > self.height:
             self.y -= self.height
+
+class Car():
+    def __init__(self):
+        self.width = CARWIDTH
+        self.height = CARHEIGHT
+        self.x = (WINDOWWIDTH-self.width)/2
+        self.y = WINDOWHEIGHT - self.height - 50  # Cố định vị trí y của xe
+        self.speed = CARSPEED
+        self.surface = pygame.Surface((self.width, self.height))
+        self.surface.fill((255, 255, 255))
+    
+    def draw(self):
+        DISPLAYSURF.blit(CARIMG, (int(self.x), int(self.y)))
+    
+    def update(self, moveLeft, moveRight, moveUp, moveDown):
+        # Chỉ xử lý di chuyển trái/phải
+        if moveLeft == True:
+            self.x -= self.speed
+        if moveRight == True:
+            self.x += self.speed
+        
+        # Giới hạn trong đường đua
+        if self.x < X_MARGIN:
+            self.x = X_MARGIN
+        if self.x + self.width > WINDOWWIDTH - X_MARGIN:
+            self.x = WINDOWWIDTH - X_MARGIN - self.width
 
 class Obstacles():
     def __init__(self):
@@ -129,75 +81,152 @@ class Obstacles():
         self.speed = OBSTACLESSPEED
         self.changeSpeed = CHANGESPEED
         self.ls = []
+        self.current_lane = 0  # Theo dõi làn đường hiện tại để tạo mẫu từ trái sang phải
+        
+        # Khởi tạo 5 vật cản ban đầu với quy luật từ trái sang phải
         for i in range(5):
             y = -CARHEIGHT-i*self.distance
-            lane = random.randint(0, 3)
+            lane = self.current_lane % 4  # Đảm bảo lane từ 0-3
             self.ls.append([lane, y])
+            self.current_lane += 1  # Tăng lane cho vật cản tiếp theo
+            
     def draw(self):
         for i in range(5):
             x = int(X_MARGIN + self.ls[i][0]*LANEWIDTH + (LANEWIDTH-self.width)/2)
             y = int(self.ls[i][1])
             DISPLAYSURF.blit(OBSTACLESIMG, (x, y))
+            
     def update(self):
         for i in range(5):
             self.ls[i][1] += self.speed
         self.speed += self.changeSpeed
-        if self.ls[0][1] > WINDOWHEIGHT:
-            self.ls.pop(0)
-            y = self.ls[3][1] - self.distance
-            lane = random.randint(0, 3)
-            self.ls.append([lane, y])
-
-class Car():
-    def __init__(self):
-        self.width = CARWIDTH
-        self.height = CARHEIGHT
-        self.x = (WINDOWWIDTH-self.width)/2
-        self.y = (WINDOWHEIGHT-self.height)/2
-        self.speed = CARSPEED
-        self.surface = pygame.Surface((self.width, self.height))
-        self.surface.fill((255, 255, 255))
-    def draw(self):
-        DISPLAYSURF.blit(CARIMG, (int(self.x), int(self.y)))
-    def update(self, moveLeft, moveRight, moveUp, moveDown):
-        if moveLeft == True:
-            self.x -= self.speed
-        if moveRight == True:
-            self.x += self.speed
-        if moveUp == True:
-            self.y -= self.speed
-        if moveDown == True:
-            self.y += self.speed
         
-        if self.x < X_MARGIN:
-            self.x = X_MARGIN
-        if self.x + self.width > WINDOWWIDTH - X_MARGIN:
-            self.x = WINDOWWIDTH - X_MARGIN - self.width
-        if self.y < 0:
-            self.y = 0
-        if self.y + self.height > WINDOWHEIGHT:
-            self.y = WINDOWHEIGHT - self.height
+        # Khi vật cản đầu tiên ra khỏi màn hình
+        if self.ls[0][1] > WINDOWHEIGHT:
+            self.ls.pop(0)  # Xóa vật cản đầu tiên
+            y = self.ls[3][1] - self.distance  # Tính toán vị trí y cho vật cản mới
+            
+            # Tạo vật cản mới theo quy luật từ trái sang phải
+            lane = self.current_lane % 4  # Đảm bảo lane từ 0-3
+            self.ls.append([lane, y])
+            self.current_lane += 1  # Tăng lane cho vật cản tiếp theo
 
 class Score():
     def __init__(self):
         self.score = 0
+        
     def draw(self):
         font = pygame.font.SysFont('consolas', 30)
         scoreSuface = font.render('Score: '+str(int(self.score)), True, (0, 0, 0))
         DISPLAYSURF.blit(scoreSuface, (10, 10))
+        
     def update(self):
         self.score += 0.02
 
+class CarAIAgent:
+    def __init__(self, action_space=2, learning_rate=0.1, discount_factor=0.95, epsilon=1.0, epsilon_decay=0.995):
+        self.q_table = defaultdict(lambda: np.zeros(action_space))
+        self.lr = learning_rate
+        self.gamma = discount_factor
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.action_space = action_space
+        self.total_reward = 0
+        self.episode_reward = 0
+    
+    def get_state(self, car, obstacles):
+        """Convert game state to a discrete state representation"""
+        car_x = int(car.x)
+        
+        # Find closest obstacle
+        closest_obstacle = None
+        min_distance = float('inf')
+        
+        for obstacle in obstacles.ls:
+            obstacle_x = int(X_MARGIN + obstacle[0]*LANEWIDTH + (LANEWIDTH-CARWIDTH)/2)
+            obstacle_y = int(obstacle[1])
+            
+            # Chỉ quan tâm đến các obstacle phía trước xe
+            if obstacle_y > car.y:
+                continue
+                
+            distance = ((car_x - obstacle_x)**2 + (car.y - obstacle_y)**2)**0.5
+            if distance < min_distance:
+                min_distance = distance
+                closest_obstacle = (obstacle_x, obstacle_y)
+        
+        if closest_obstacle:
+            # Rời rạc hóa khoảng cách thành các khoảng
+            dx = (closest_obstacle[0] - car_x) // 20
+            dy = (closest_obstacle[1] - car.y) // 20
+            
+            # Thêm vị trí làn của xe
+            car_lane = (car_x - X_MARGIN) // LANEWIDTH
+            
+            return (dx, dy, car_lane)
+        return (0, 0, 0)
+    
+    def get_action(self, state):
+        if np.random.random() < self.epsilon:
+            return np.random.randint(self.action_space)
+        else:
+            return np.argmax(self.q_table[state])
+    
+    def update(self, state, action, reward, next_state):
+        old_value = self.q_table[state][action]
+        next_max = np.max(self.q_table[next_state])
+        
+        new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * next_max)
+        self.q_table[state][action] = new_value
+        
+        self.epsilon = max(0.01, self.epsilon * self.epsilon_decay)
+        self.episode_reward += reward
+    
+    def save_q_table(self, filename='q_table.json'):
+        q_table_dict = {str(state): values.tolist() for state, values in self.q_table.items()}
+        save_data = {
+            'q_table': q_table_dict,
+            'epsilon': self.epsilon,
+            'total_reward': self.total_reward
+        }
+        with open(filename, 'w') as f:
+            json.dump(save_data, f)
+            
+    def load_q_table(self, filename='q_table.json'):
+        try:
+            with open(filename, 'r') as f:
+                save_data = json.load(f)
+            
+            self.q_table = defaultdict(lambda: np.zeros(self.action_space))
+            for state_str, values in save_data['q_table'].items():
+                state = tuple(map(int, state_str.strip('()').split(', ')))
+                self.q_table[state] = np.array(values)
+            
+            self.epsilon = save_data['epsilon']
+            self.total_reward = save_data['total_reward']
+            return True
+        except FileNotFoundError:
+            print("Không tìm thấy file Q-table, bắt đầu training mới")
+            return False
+    
+    def get_movement_from_action(self, action):
+        moveLeft = False
+        moveRight = False
+        
+        if action == 0:  # Left
+            moveLeft = True
+        elif action == 1:  # Right
+            moveRight = True
+            
+        return moveLeft, moveRight, False, False
+
 def calculate_reward(car, obstacles, score, previous_score):
     """Calculate reward for the AI agent"""
-    # Check for collision
     if isGameover(car, obstacles):
         return -100
     
-    # Reward for score increase
     score_reward = (score.score - previous_score) * 10
     
-    # Calculate distance to nearest obstacle
     min_distance = float('inf')
     for obstacle in obstacles.ls:
         obstacle_x = int(X_MARGIN + obstacle[0]*LANEWIDTH + (LANEWIDTH-CARWIDTH)/2)
@@ -205,10 +234,8 @@ def calculate_reward(car, obstacles, score, previous_score):
         distance = ((car.x - obstacle_x)**2 + (car.y - obstacle_y)**2)**0.5
         min_distance = min(min_distance, distance)
     
-    # Reward for keeping safe distance
     distance_reward = min_distance / 100
     
-    # Extra reward for staying in center of lane
     lane_pos = (car.x - X_MARGIN) % LANEWIDTH
     lane_center = LANEWIDTH / 2
     lane_reward = -abs(lane_pos - lane_center) / 10
@@ -240,7 +267,6 @@ def gameStart(bg, ai_agent):
     commentSuface = font.render('Press "space" to watch AI play', True, (0, 0, 0))
     commentSize = commentSuface.get_size()
     
-    # Show AI stats
     font = pygame.font.SysFont('consolas', 16)
     statsSuface = font.render(f'Epsilon: {ai_agent.epsilon:.3f} | Total Reward: {ai_agent.total_reward:.0f}', True, (0, 0, 0))
     statsSize = statsSuface.get_size()
@@ -274,16 +300,10 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
                 pygame.quit()
                 sys.exit()
         
-        # Get current state
         current_state = ai_agent.get_state(car, obstacles)
-        
-        # Choose action
         action = ai_agent.get_action(current_state)
-        
-        # Execute action
         moveLeft, moveRight, moveUp, moveDown = ai_agent.get_movement_from_action(action)
         
-        # Update game state
         if isGameover(car, obstacles):
             ai_agent.total_reward += ai_agent.episode_reward
             return
@@ -297,31 +317,27 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
         score.draw()
         score.update()
         
-        # Calculate reward and update AI
         reward = calculate_reward(car, obstacles, score, previous_score)
         next_state = ai_agent.get_state(car, obstacles)
         ai_agent.update(current_state, action, reward, next_state)
         
         previous_score = score.score
         
-        # Display AI stats
         font = pygame.font.SysFont('consolas', 16)
         statsSuface = font.render(f'Epsilon: {ai_agent.epsilon:.3f} | Episode Reward: {ai_agent.episode_reward:.0f}', True, (0, 0, 0))
         DISPLAYSURF.blit(statsSuface, (10, 40))
         
         pygame.display.update()
         fpsClock.tick(FPS)
-
 def gameOver(bg, car, obstacles, score, ai_agent):
     font = pygame.font.SysFont('consolas', 60)
     headingSuface = font.render('GAME OVER', True, (255, 0, 0))
     headingSize = headingSuface.get_size()
-
+    
     font = pygame.font.SysFont('consolas', 20)
     commentSuface = font.render('Press "space" to replay', True, (0, 0, 0))
     commentSize = commentSuface.get_size()
     
-    # Show AI stats
     font = pygame.font.SysFont('consolas', 16)
     statsSuface = font.render(f'Total Reward: {ai_agent.total_reward:.0f} | Episode Reward: {ai_agent.episode_reward:.0f}', True, (0, 0, 0))
     statsSize = statsSuface.get_size()
@@ -345,27 +361,28 @@ def gameOver(bg, car, obstacles, score, ai_agent):
         fpsClock.tick(FPS)
 
 def main():
-    # Khởi tạo các đối tượng game
     bg = Background()
     car = Car()
     obstacles = Obstacles()
     score = Score()
     ai_agent = CarAIAgent(
-        learning_rate=0.1,      # Tốc độ học
-        discount_factor=0.95,   # Hệ số chiết khấu
-        epsilon=1.0,            # Tỷ lệ khám phá ban đầu
-        epsilon_decay=0.995     # Tốc độ giảm epsilon
+        action_space=2,         # Chỉ 2 action: trái/phải
+        learning_rate=0.1,
+        discount_factor=0.95,
+        epsilon=1.0,
+        epsilon_decay=0.995
     )
     
-    # Vòng lặp chính của game
+    # Tải Q-table nếu có
+    ai_agent.load_q_table()
+    
     while True:
-        # Hiển thị màn hình bắt đầu
         gameStart(bg, ai_agent)
-        
-        # Bắt đầu gameplay với AI
         gamePlay(bg, car, obstacles, score, ai_agent)
         
-        # Hiển thị màn hình kết thúc và stats
+        # Lưu Q-table sau mỗi episode
+        ai_agent.save_q_table()
+        
         gameOver(bg, car, obstacles, score, ai_agent)
 
 if __name__ == '__main__':
