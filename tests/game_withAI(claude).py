@@ -3,6 +3,7 @@ import numpy as np
 from collections import defaultdict
 from pygame.locals import *
 import json
+import os
 
 # Game Constants
 WINDOWWIDTH = 400
@@ -18,6 +19,9 @@ CHANGESPEED = 0.001
 BGSPEED = 1.5
 FPS = 60
 
+# File lưu kết quả học
+MODEL_FILE = 'q_table.json'
+
 # Pygame Initialization
 pygame.init()
 fpsClock = pygame.time.Clock()
@@ -31,15 +35,16 @@ BGIMG = pygame.image.load('assets/images/background.png')
 
 class CarAIAgent:
     def __init__(self, action_space=4, learning_rate=0.1, discount_factor=0.95, epsilon=1.0, epsilon_decay=0.995):
+        self.action_space = action_space
         self.q_table = defaultdict(lambda: np.zeros(action_space))
         self.lr = learning_rate
         self.gamma = discount_factor
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
-        self.action_space = action_space
         self.total_reward = 0
         self.episode_reward = 0
-        
+        self.load_model()
+
     def get_state(self, car, obstacles):
         """Convert game state to a discrete state representation"""
         car_x = int(car.x)
@@ -86,7 +91,7 @@ class CarAIAgent:
         
         self.epsilon = max(0.01, self.epsilon * self.epsilon_decay)
         self.episode_reward += reward
-    
+
     def get_movement_from_action(self, action):
         """Convert action index to movement commands"""
         moveLeft = False
@@ -105,7 +110,38 @@ class CarAIAgent:
             
         return moveLeft, moveRight, moveUp, moveDown
 
-class Background():
+    def save_model(self):
+        """Save the Q-table and epsilon value into a JSON file"""
+        serializable_q = {str(k): v.tolist() for k, v in self.q_table.items()}
+        model_data = {
+            'q_table': serializable_q,
+            'epsilon': self.epsilon
+        }
+        with open(MODEL_FILE, 'w') as f:
+            json.dump(model_data, f)
+
+    def load_model(self):
+        """Load the Q-table and epsilon value from a JSON file if exists"""
+        if os.path.exists(MODEL_FILE):
+            try:
+                with open(MODEL_FILE, 'r') as f:
+                    model_data = json.load(f)
+                q_table_loaded = {}
+                for key, value in model_data.get('q_table', {}).items():
+                    # Convert string representation of tuple back to tuple
+                    state = eval(key)
+                    q_table_loaded[state] = np.array(value)
+                self.q_table = defaultdict(lambda: np.zeros(self.action_space), q_table_loaded)
+                self.epsilon = model_data.get('epsilon', self.epsilon)
+            except Exception as e:
+                print("Error loading model:", e)
+                # Nếu có lỗi, reset Q-table
+                self.q_table = defaultdict(lambda: np.zeros(self.action_space))
+        else:
+            # Không có file lưu, giữ nguyên giá trị khởi tạo
+            pass
+
+class Background:
     def __init__(self):
         self.x = 0
         self.y = 0
@@ -115,13 +151,13 @@ class Background():
         self.height = self.img.get_height()
     def draw(self):
         DISPLAYSURF.blit(self.img, (int(self.x), int(self.y)))
-        DISPLAYSURF.blit(self.img, (int(self.x), int(self.y-self.height)))
+        DISPLAYSURF.blit(self.img, (int(self.x), int(self.y - self.height)))
     def update(self):
         self.y += self.speed
         if self.y > self.height:
             self.y -= self.height
 
-class Obstacles():
+class Obstacles:
     def __init__(self):
         self.width = CARWIDTH
         self.height = CARHEIGHT
@@ -130,12 +166,12 @@ class Obstacles():
         self.changeSpeed = CHANGESPEED
         self.ls = []
         for i in range(5):
-            y = -CARHEIGHT-i*self.distance
+            y = -CARHEIGHT - i * self.distance
             lane = random.randint(0, 3)
             self.ls.append([lane, y])
     def draw(self):
         for i in range(5):
-            x = int(X_MARGIN + self.ls[i][0]*LANEWIDTH + (LANEWIDTH-self.width)/2)
+            x = int(X_MARGIN + self.ls[i][0] * LANEWIDTH + (LANEWIDTH - self.width) / 2)
             y = int(self.ls[i][1])
             DISPLAYSURF.blit(OBSTACLESIMG, (x, y))
     def update(self):
@@ -148,25 +184,25 @@ class Obstacles():
             lane = random.randint(0, 3)
             self.ls.append([lane, y])
 
-class Car():
+class Car:
     def __init__(self):
         self.width = CARWIDTH
         self.height = CARHEIGHT
-        self.x = (WINDOWWIDTH-self.width)/2
-        self.y = (WINDOWHEIGHT-self.height)/2
+        self.x = (WINDOWWIDTH - self.width) / 2
+        self.y = (WINDOWHEIGHT - self.height) / 2
         self.speed = CARSPEED
         self.surface = pygame.Surface((self.width, self.height))
         self.surface.fill((255, 255, 255))
     def draw(self):
         DISPLAYSURF.blit(CARIMG, (int(self.x), int(self.y)))
     def update(self, moveLeft, moveRight, moveUp, moveDown):
-        if moveLeft == True:
+        if moveLeft:
             self.x -= self.speed
-        if moveRight == True:
+        if moveRight:
             self.x += self.speed
-        if moveUp == True:
+        if moveUp:
             self.y -= self.speed
-        if moveDown == True:
+        if moveDown:
             self.y += self.speed
         
         if self.x < X_MARGIN:
@@ -178,87 +214,50 @@ class Car():
         if self.y + self.height > WINDOWHEIGHT:
             self.y = WINDOWHEIGHT - self.height
 
-class Score():
+class Score:
     def __init__(self):
         self.score = 0
     def draw(self):
         font = pygame.font.SysFont('consolas', 30)
-        scoreSuface = font.render('Score: '+str(int(self.score)), True, (0, 0, 0))
-        DISPLAYSURF.blit(scoreSuface, (10, 10))
+        scoreSurface = font.render('Score: ' + str(int(self.score)), True, (0, 0, 0))
+        DISPLAYSURF.blit(scoreSurface, (10, 10))
     def update(self):
         self.score += 0.02
 
 def calculate_reward(car, obstacles, score, previous_score):
-    """Calculate reward for the AI agent"""
     # Check for collision
     if isGameover(car, obstacles):
         return -100
-    
     # Reward for score increase
     score_reward = (score.score - previous_score) * 10
-    
     # Calculate distance to nearest obstacle
     min_distance = float('inf')
     for obstacle in obstacles.ls:
-        obstacle_x = int(X_MARGIN + obstacle[0]*LANEWIDTH + (LANEWIDTH-CARWIDTH)/2)
+        obstacle_x = int(X_MARGIN + obstacle[0] * LANEWIDTH + (LANEWIDTH - CARWIDTH) / 2)
         obstacle_y = int(obstacle[1])
         distance = ((car.x - obstacle_x)**2 + (car.y - obstacle_y)**2)**0.5
         min_distance = min(min_distance, distance)
-    
-    # Reward for keeping safe distance
     distance_reward = min_distance / 100
-    
     # Extra reward for staying in center of lane
     lane_pos = (car.x - X_MARGIN) % LANEWIDTH
     lane_center = LANEWIDTH / 2
     lane_reward = -abs(lane_pos - lane_center) / 10
-    
     return score_reward + distance_reward + lane_reward
 
 def rectCollision(rect1, rect2):
-    if rect1[0] <= rect2[0]+rect2[2] and rect2[0] <= rect1[0]+rect1[2] and rect1[1] <= rect2[1]+rect2[3] and rect2[1] <= rect1[1]+rect1[3]:
+    if rect1[0] <= rect2[0] + rect2[2] and rect2[0] <= rect1[0] + rect1[2] and rect1[1] <= rect2[1] + rect2[3] and rect2[1] <= rect1[1] + rect1[3]:
         return True
     return False
 
 def isGameover(car, obstacles):
     carRect = [car.x, car.y, car.width, car.height]
     for i in range(5):
-        x = int(X_MARGIN + obstacles.ls[i][0]*LANEWIDTH + (LANEWIDTH-obstacles.width)/2)
+        x = int(X_MARGIN + obstacles.ls[i][0] * LANEWIDTH + (LANEWIDTH - obstacles.width) / 2)
         y = int(obstacles.ls[i][1])
         obstaclesRect = [x, y, obstacles.width, obstacles.height]
-        if rectCollision(carRect, obstaclesRect) == True:
+        if rectCollision(carRect, obstaclesRect):
             return True
     return False
-
-def gameStart(bg, ai_agent):
-    bg.__init__()
-    font = pygame.font.SysFont('consolas', 60)
-    headingSuface = font.render('AI RACING', True, (255, 0, 0))
-    headingSize = headingSuface.get_size()
-    
-    font = pygame.font.SysFont('consolas', 20)
-    commentSuface = font.render('Press "space" to watch AI play', True, (0, 0, 0))
-    commentSize = commentSuface.get_size()
-    
-    # Show AI stats
-    font = pygame.font.SysFont('consolas', 16)
-    statsSuface = font.render(f'Epsilon: {ai_agent.epsilon:.3f} | Total Reward: {ai_agent.total_reward:.0f}', True, (0, 0, 0))
-    statsSize = statsSuface.get_size()
-    
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYUP:
-                if event.key == K_SPACE:
-                    return
-        bg.draw()
-        DISPLAYSURF.blit(headingSuface, (int((WINDOWWIDTH - headingSize[0])/2), 100))
-        DISPLAYSURF.blit(commentSuface, (int((WINDOWWIDTH - commentSize[0])/2), 400))
-        DISPLAYSURF.blit(statsSuface, (int((WINDOWWIDTH - statsSize[0])/2), 450))
-        pygame.display.update()
-        fpsClock.tick(FPS)
 
 def gamePlay(bg, car, obstacles, score, ai_agent):
     car.__init__()
@@ -267,27 +266,24 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
     score.__init__()
     previous_score = 0
     ai_agent.episode_reward = 0
-    
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                ai_agent.save_model()
                 pygame.quit()
                 sys.exit()
-        
-        # Get current state
+
         current_state = ai_agent.get_state(car, obstacles)
-        
-        # Choose action
         action = ai_agent.get_action(current_state)
-        
-        # Execute action
         moveLeft, moveRight, moveUp, moveDown = ai_agent.get_movement_from_action(action)
-        
-        # Update game state
+
         if isGameover(car, obstacles):
             ai_agent.total_reward += ai_agent.episode_reward
-            return
-            
+            # Lưu lại kết quả học sau mỗi episode
+            ai_agent.save_model()
+            break
+
         bg.draw()
         bg.update()
         car.draw()
@@ -296,82 +292,31 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
         obstacles.update()
         score.draw()
         score.update()
-        
-        # Calculate reward and update AI
+
         reward = calculate_reward(car, obstacles, score, previous_score)
         next_state = ai_agent.get_state(car, obstacles)
         ai_agent.update(current_state, action, reward, next_state)
-        
+
         previous_score = score.score
-        
-        # Display AI stats
+
         font = pygame.font.SysFont('consolas', 16)
-        statsSuface = font.render(f'Epsilon: {ai_agent.epsilon:.3f} | Episode Reward: {ai_agent.episode_reward:.0f}', True, (0, 0, 0))
-        DISPLAYSURF.blit(statsSuface, (10, 40))
-        
-        pygame.display.update()
-        fpsClock.tick(FPS)
-
-def gameOver(bg, car, obstacles, score, ai_agent):
-    font = pygame.font.SysFont('consolas', 60)
-    headingSuface = font.render('GAME OVER', True, (255, 0, 0))
-    headingSize = headingSuface.get_size()
-
-    font = pygame.font.SysFont('consolas', 20)
-    commentSuface = font.render('Press "space" to replay', True, (0, 0, 0))
-    commentSize = commentSuface.get_size()
-    
-    # Show AI stats
-    font = pygame.font.SysFont('consolas', 16)
-    statsSuface = font.render(f'Total Reward: {ai_agent.total_reward:.0f} | Episode Reward: {ai_agent.episode_reward:.0f}', True, (0, 0, 0))
-    statsSize = statsSuface.get_size()
-    
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYUP:
-                if event.key == K_SPACE:
-                    return
-        bg.draw()
-        car.draw()
-        obstacles.draw()
-        score.draw()
-        DISPLAYSURF.blit(headingSuface, (int((WINDOWWIDTH - headingSize[0])/2), 100))
-        DISPLAYSURF.blit(commentSuface, (int((WINDOWWIDTH - commentSize[0])/2), 400))
-        DISPLAYSURF.blit(statsSuface, (int((WINDOWWIDTH - statsSize[0])/2), 450))
+        statsSurface = font.render(f'Epsilon: {ai_agent.epsilon:.3f} | Episode Reward: {ai_agent.episode_reward:.0f}', True, (0, 0, 0))
+        DISPLAYSURF.blit(statsSurface, (10, 40))
         pygame.display.update()
         fpsClock.tick(FPS)
 
 def main():
-    # Khởi tạo các đối tượng game
     bg = Background()
     car = Car()
     obstacles = Obstacles()
     score = Score()
-    ai_agent = CarAIAgent(
-        learning_rate=0.1,      # Tốc độ học
-        discount_factor=0.95,   # Hệ số chiết khấu
-        epsilon=1.0,            # Tỷ lệ khám phá ban đầu
-        epsilon_decay=0.995     # Tốc độ giảm epsilon
-    )
-    
-    # Vòng lặp chính của game
+    ai_agent = CarAIAgent(learning_rate=0.1, discount_factor=0.95, epsilon=1.0, epsilon_decay=0.995)
+
+    # Vòng lặp chính tự động chơi lại mà không cần ấn space
     while True:
-        # Hiển thị màn hình bắt đầu
-        gameStart(bg, ai_agent)
-        
-        # Bắt đầu gameplay với AI
         gamePlay(bg, car, obstacles, score, ai_agent)
-        
-        # Hiển thị màn hình kết thúc và stats
-        gameOver(bg, car, obstacles, score, ai_agent)
 
 if __name__ == '__main__':
-    # Bỏ qua cảnh báo libpng
     import warnings
     warnings.filterwarnings("ignore", message="libpng warning: iCCP: known incorrect sRGB profile")
-    
-    # Khởi chạy game
     main()

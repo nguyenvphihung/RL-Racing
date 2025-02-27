@@ -76,30 +76,23 @@ class Car():
         self.width = CARWIDTH
         self.height = CARHEIGHT
         self.x = (WINDOWWIDTH-self.width)/2
-        self.y = (WINDOWHEIGHT-self.height)/2
+        self.y = WINDOWHEIGHT - self.height - 20  # Fixed Y position near bottom
         self.speed = CARSPEED
         self.surface = pygame.Surface((self.width, self.height))
         self.surface.fill((255, 255, 255))
     def draw(self):
         DISPLAYSURF.blit(CARIMG, (int(self.x), int(self.y)))
-    def update(self, moveLeft, moveRight, moveUp, moveDown):
+    def update(self, moveLeft, moveRight):
         if moveLeft == True:
             self.x -= self.speed
         if moveRight == True:
             self.x += self.speed
-        if moveUp == True:
-            self.y -= self.speed
-        if moveDown == True:
-            self.y += self.speed
         
+        # Only check horizontal boundaries
         if self.x < X_MARGIN:
             self.x = X_MARGIN
         if self.x + self.width > WINDOWWIDTH - X_MARGIN:
             self.x = WINDOWWIDTH - X_MARGIN - self.width
-        if self.y < 0:
-            self.y = 0
-        if self.y + self.height > WINDOWHEIGHT :
-            self.y = WINDOWHEIGHT - self.height
 
 class Score():
     def __init__(self):
@@ -156,8 +149,6 @@ def gamePlay(bg, car, obstacles, score):
     score.__init__()
     moveLeft = False
     moveRight = False
-    moveUp = False
-    moveDown = False
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -168,25 +159,17 @@ def gamePlay(bg, car, obstacles, score):
                     moveLeft = True
                 if event.key == K_RIGHT:
                     moveRight = True
-                if event.key == K_UP:
-                    moveUp = True
-                if event.key == K_DOWN:
-                    moveDown = True
             if event.type == KEYUP:
                 if event.key == K_LEFT:
                     moveLeft = False
                 if event.key == K_RIGHT:
                     moveRight = False
-                if event.key == K_UP:
-                    moveUp = False
-                if event.key == K_DOWN:
-                    moveDown = False
         if isGameover(car, obstacles):
             return
         bg.draw()
         bg.update()
         car.draw()
-        car.update(moveLeft, moveRight, moveUp, moveDown)
+        car.update(moveLeft, moveRight)
         obstacles.draw()
         obstacles.update()
         score.draw()
