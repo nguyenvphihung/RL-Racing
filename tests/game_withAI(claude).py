@@ -12,11 +12,11 @@ X_MARGIN = 80
 LANEWIDTH = 60
 CARWIDTH = 40
 CARHEIGHT = 60
-CARSPEED = 3
+CARSPEED = 6
 DISTANCE = 200
-OBSTACLESSPEED = 2
-CHANGESPEED = 0.001
-BGSPEED = 1.5
+OBSTACLESSPEED = 1
+CHANGESPEED = 0.0005
+BGSPEED = 2
 FPS = 60
 
 # File lưu kết quả học
@@ -34,7 +34,7 @@ OBSTACLESIMG = pygame.image.load('assets/images/obstacles.png')
 BGIMG = pygame.image.load('assets/images/background.png')
 
 class CarAIAgent:
-    def __init__(self, action_space=4, learning_rate=0.1, discount_factor=0.95, epsilon=1.0, epsilon_decay=0.995):
+    def __init__(self, action_space=2, learning_rate=0.1, discount_factor=0.95, epsilon=1.0, epsilon_decay=0.995):
         self.action_space = action_space
         self.q_table = defaultdict(lambda: np.zeros(action_space))
         self.lr = learning_rate
@@ -93,22 +93,16 @@ class CarAIAgent:
         self.episode_reward += reward
 
     def get_movement_from_action(self, action):
-        """Convert action index to movement commands"""
+        """Convert action index to movement commands (chỉ di chuyển sang trái/phải)"""
         moveLeft = False
         moveRight = False
-        moveUp = False
-        moveDown = False
         
         if action == 0:  # Left
             moveLeft = True
         elif action == 1:  # Right
             moveRight = True
-        elif action == 2:  # Up
-            moveUp = True
-        elif action == 3:  # Down
-            moveDown = True
             
-        return moveLeft, moveRight, moveUp, moveDown
+        return moveLeft, moveRight
 
     def save_model(self):
         """Save the Q-table and epsilon value into a JSON file"""
@@ -184,35 +178,28 @@ class Obstacles:
             lane = random.randint(0, 3)
             self.ls.append([lane, y])
 
-class Car:
+class Car():
     def __init__(self):
         self.width = CARWIDTH
         self.height = CARHEIGHT
-        self.x = (WINDOWWIDTH - self.width) / 2
-        self.y = (WINDOWHEIGHT - self.height) / 2
+        self.x = (WINDOWWIDTH-self.width)/2
+        self.y = WINDOWHEIGHT - self.height - 20  # Fixed Y position near bottom
         self.speed = CARSPEED
         self.surface = pygame.Surface((self.width, self.height))
         self.surface.fill((255, 255, 255))
     def draw(self):
         DISPLAYSURF.blit(CARIMG, (int(self.x), int(self.y)))
-    def update(self, moveLeft, moveRight, moveUp, moveDown):
-        if moveLeft:
+    def update(self, moveLeft, moveRight):
+        if moveLeft == True:
             self.x -= self.speed
-        if moveRight:
+        if moveRight == True:
             self.x += self.speed
-        if moveUp:
-            self.y -= self.speed
-        if moveDown:
-            self.y += self.speed
         
+        # Only check horizontal boundaries
         if self.x < X_MARGIN:
             self.x = X_MARGIN
         if self.x + self.width > WINDOWWIDTH - X_MARGIN:
             self.x = WINDOWWIDTH - X_MARGIN - self.width
-        if self.y < 0:
-            self.y = 0
-        if self.y + self.height > WINDOWHEIGHT:
-            self.y = WINDOWHEIGHT - self.height
 
 class Score:
     def __init__(self):
@@ -276,7 +263,7 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
 
         current_state = ai_agent.get_state(car, obstacles)
         action = ai_agent.get_action(current_state)
-        moveLeft, moveRight, moveUp, moveDown = ai_agent.get_movement_from_action(action)
+        moveLeft, moveRight = ai_agent.get_movement_from_action(action)
 
         if isGameover(car, obstacles):
             ai_agent.total_reward += ai_agent.episode_reward
@@ -287,7 +274,7 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
         bg.draw()
         bg.update()
         car.draw()
-        car.update(moveLeft, moveRight, moveUp, moveDown)
+        car.update(moveLeft, moveRight)
         obstacles.draw()
         obstacles.update()
         score.draw()
