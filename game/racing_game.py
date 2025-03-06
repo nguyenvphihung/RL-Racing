@@ -20,6 +20,10 @@ OBSTACLESIMG = pygame.image.load('assets/images/obstacles.png')
 BGSPEED = 1.5
 BGIMG = pygame.image.load('assets/images/background.png')
 
+pygame.display.set_caption('RACING')
+icon = pygame.image.load('assets/images/icon.png')
+pygame.display.set_icon(icon)
+
 pygame.init()
 
 FPS = 60

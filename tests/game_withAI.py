@@ -28,6 +28,9 @@ fpsClock = pygame.time.Clock()
 DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
 pygame.display.set_caption('AI RACING')
 
+icon = pygame.image.load('assets/images/icon.png')
+pygame.display.set_icon(icon)
+
 # Load Images
 CARIMG = pygame.image.load('assets/images/car.png')
 OBSTACLESIMG = pygame.image.load('assets/images/obstacles.png')
