@@ -92,7 +92,6 @@ class CarAIAgent:
         new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * next_max)
         self.q_table[state][action] = new_value
         
-        self.epsilon = max(0.01, self.epsilon * self.epsilon_decay)
         self.episode_reward += reward
 
     def get_movement_from_action(self, action):
@@ -270,8 +269,10 @@ def gamePlay(bg, car, obstacles, score, ai_agent):
 
         if isGameover(car, obstacles):
             ai_agent.total_reward += ai_agent.episode_reward
-            # Lưu lại kết quả học sau mỗi episode
+
             ai_agent.save_model()
+            
+            ai_agent.epsilon = max(0.01, ai_agent.epsilon * ai_agent.epsilon_decay)
             break
 
         bg.draw()
